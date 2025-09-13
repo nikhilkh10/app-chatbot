@@ -11,10 +11,10 @@ load_dotenv()
 GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 
 # Database config
-db_user = "root"
-db_password = "root"
+db_user = os.environ.get("DB_USER")
+db_password = os.environ.get("DB_PASS")
 db_host = "localhost"
-db_name = "app_test"
+db_name = os.environ.get("DB_NAME")
 
 mysql_uri = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}/{db_name}"
 db = SQLDatabase.from_uri(mysql_uri)
