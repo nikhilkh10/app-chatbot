@@ -13,7 +13,7 @@ GOOGLE_API_KEY = os.environ.get("GOOGLE_API_KEY")
 # Database config
 db_user = os.environ.get("DB_USER")
 db_password = os.environ.get("DB_PASS")
-db_host = "localhost"
+db_host = os.environ.get("DB_HOST")
 db_name = os.environ.get("DB_NAME")
 
 mysql_uri = f"mysql+mysqlconnector://{db_user}:{db_password}@{db_host}/{db_name}"
