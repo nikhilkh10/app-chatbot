@@ -24,14 +24,16 @@ template = """Based on the following SQL database schema, generate ONLY a valid 
 
 IMPORTANT RULES:
 - If the user greets (e.g., "hi", "hello", "hey", "good morning", "how are you"), do not generate SQL.
-    Instead, return: SELECT 'Hello! How can I help you with notices or routines today?' AS message;
+    Instead, return: SELECT 'Hello! How can I help you today?' AS message;
 - Return only the SQL query, nothing else (no explanations, formatting, or comments)
 - Use proper SQL syntax for MySQL
-- Always include LIMIT 5 at the end of the query
-- Only access the tables: api_notice and api_routine
+- If the user specifies a number (e.g., "10", "15"), use that as the LIMIT.
+- If the user says "more than 5", use LIMIT 10.
+- If the user says "all" or does not specify a number, use LIMIT 5 by default.
+- Only access the tables: api_notice, api_event and api_routine
 - Never access or expose author IDs or other sensitive fields
 - Do not use DROP, DELETE, UPDATE, INSERT, ALTER, CREATE, or schema-altering statements
-- If the question cannot be answered using api_notice or api_routine, return:
+- If the question cannot be answered using api_notice, api_event or api_routine, return:
   SELECT 'Query not possible based on given rules' AS message;
 - If an invalid or unsafe operation is attempted, return:
   SELECT 'Invalid operation. Only SELECT queries are allowed' AS message;
@@ -78,10 +80,18 @@ def clean_sql(raw_response: str) -> str:
 
 def is_safe_sql(query: str) -> bool:
     """
-    Ensure query is read-only and safe.
+    Ensures only SELECT queries are executed and no unsafe keywords exist.
     """
+    # Trim whitespace and semicolons
+    query = query.strip().rstrip(";").upper()
+
+    # Allow only queries starting with SELECT
+    if not query.startswith("SELECT"):
+        return False
+
+    # Check for dangerous commands anywhere in the text
     forbidden = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE"]
-    return not any(keyword in query.upper() for keyword in forbidden)
+    return not any(keyword in query for keyword in forbidden)
 
 
 def execute_sql(query: str):
@@ -89,7 +99,7 @@ def execute_sql(query: str):
     Run the SQL safely with error handling.
     """
     if not is_safe_sql(query):
-        return {"error": "Unsafe SQL detected. Only SELECT queries are allowed."}
+        return {"error": "You are not allowed to perform sensitive operations."}
 
     try:
         result = db.run(query)
@@ -107,14 +117,19 @@ def get_and_send(question: str):
     # Generate SQL
     raw_response = sql_chain.invoke({"question": question.strip()})
     cleaned_sql = clean_sql(raw_response)
+    print("Raw Query:",raw_response)
+    print("Generated SQL:", cleaned_sql)
 
     # Execute SQL
     execution_result = execute_sql(cleaned_sql)
 
     # If error, return directly
-    if "error" in execution_result or "message" in execution_result:
-        return cleaned_sql, execution_result
-
+    if "error" in execution_result:
+        # friendly_message = "Sorry, something went wrong. Please try again"
+        return cleaned_sql, execution_result["error"]
+    if "message" in execution_result:
+        return cleaned_sql, execution_result["message"]
+    
     # Convert DB result to natural language
     nl_response = llm.invoke(
         f"SQL: {cleaned_sql}\nResult: {execution_result['result']}\n"
